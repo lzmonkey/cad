@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Collections;
 
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.ApplicationServices;
@@ -15,10 +16,12 @@ using OfficeOpenXml;
 
 namespace MyFirstProject1
 {
-    
+
     public class Class1
     {
-        static Dictionary<int, int> bc = new Dictionary<int, int>();
+        static Dictionary<int, int> bc = new Dictionary<int, int>();//表格里的长度统计
+        static Dictionary<int, int> gc = new Dictionary<int, int>();//余料统计
+        static ArrayList globalChoose;
         public static void DrawBorder(Hatch hat, Transaction trans, BlockTableRecord btr, int numSample)
         {
             //取得边界数  
@@ -54,39 +57,46 @@ namespace MyFirstProject1
             }
         }
 
-        public static void cutLine(Point2d a,Point2d b,ref Database acCurDb,double textposition,   Transaction acTrans,ref BlockTableRecord acBlkTblRec )
+        public static void cutLine(Point2d a, Point2d b, ref Database acCurDb, double textposition, Transaction acTrans, ref BlockTableRecord acBlkTblRec)
         {
 
-
+            if (a.GetDistanceTo(b) > 80000)
+            {
+                return;
+            }
             Point2d ori = new Point2d();
-            while(a.GetDistanceTo(b)-1200>10)
+
+
+
+
+            while (a.GetDistanceTo(b) - 600 > 200 || Math.Abs(a.GetDistanceTo(b) - 600) < 2)
             {
 
-                if(Math.Abs(a.X-b.X)<1)
+                if (Math.Abs(a.X - b.X) < 1)
                 {//竖
-                    if(a.Y>b.Y)//上向下
+                    if (a.Y > b.Y)//上向下
                     {
                         ori = a;
-                        a = new Point2d(a.X, a.Y - 1200);
+                        a = new Point2d(a.X, a.Y - 600);
                     }
                     else//下向上
                     {
                         ori = a;
-                        a = new Point2d(a.X,a.Y + 1200);
+                        a = new Point2d(a.X, a.Y + 600);
                     }
 
                 }
                 else//横
                 {
-                    if(a.X<b.X)//左向右
+                    if (a.X < b.X)//左向右
                     {
                         ori = a;
-                        a = new Point2d(a.X + 1200, a.Y);
+                        a = new Point2d(a.X + 600, a.Y);
                     }
                     else//右向左
                     {
                         ori = a;
-                        a = new Point2d(a.X - 1200, a.Y  );
+                        a = new Point2d(a.X - 600, a.Y);
                     }
                 }
                 AlignedDimension acRotDim = new AlignedDimension();
@@ -113,77 +123,963 @@ namespace MyFirstProject1
                 acTrans.AddNewlyCreatedDBObject(acRotDim, true);
 
                 //bc[1200] += 1;
-                if (!bc.ContainsKey(1200))
+                if (!bc.ContainsKey(600))
                 {
-                    bc.Add(1200, 1);
+                    bc.Add(600, 1);
                 }
                 else
                 {
-                    bc[1200] += 1;
+                    bc[600] += 1;
                 }
-
-
+                if (gc.ContainsKey(600))
+                {
+                    if(gc[600] > 0)
+                    {
+                        gc[600]--;
+                    }
+                    else
+                    {
+                        gc[600]++;
+                    }
+                }
+                else
+                {
+                    gc.Add(600, 1);
+                }
             }
+
+
+
             //剩1400以下的
+            //Dictionary<int, int> gccopy = new Dictionary<int, int>(gc);
+            ArrayList ary = new ArrayList();  //剩料的 arraylist格式
+            ArrayList choose = new ArrayList(); //用料的 arraylist格式
+                                                //先把字典里的数据拿到数组里
 
-            if (!bc.ContainsKey((int)((int)a.GetDistanceTo(b) + 1) / 10 * 10))
-            {
-                bc.Add(((int)((int)a.GetDistanceTo(b) + 1) / 10) * 10, 1);
-            }
-            else
-            {
-                bc[((int)((int)a.GetDistanceTo(b) + 1) / 10) * 10] += 1;
-            }
+            string keyNames = "";
 
-            if (Math.Abs(a.X - b.X) < 1)
-            {//竖
-                if (a.Y > b.Y)//上向下
+            foreach (int key in gc.Keys)
+
+            {
+
+                if (gc[key] == 0)
+
                 {
-                    ori = a;
-                    a = new Point2d(a.X, a.Y - a.GetDistanceTo(b));
-                }
-                else//下向上
-                {
-                    ori = a;
-                    a = new Point2d(a.X, a.Y + a.GetDistanceTo(b) );
+                    keyNames += key + ",";
                 }
 
             }
-            else//横
+
+            string[] str_keyNames = keyNames.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string key in str_keyNames)
             {
-                if (a.X < b.X)//左向右
+                gc.Remove(int.Parse(key));
+            }
+
+
+
+            foreach (KeyValuePair<int, int> kv in gc)
+
+            {
+                int times = kv.Value;
+
+                while (times > 0)
                 {
-                    ori = a;
-                    a = new Point2d(a.X + a.GetDistanceTo(b), a.Y );
+                    ary.Add(kv.Key);
+                    times--;
                 }
-                else//右向左
+
+            }
+            int leftlen = (int)(a.GetDistanceTo(b) + 1) / 10 * 10;
+            bool gd = false;
+            //1块能解决
+            if (ary.Contains(leftlen) && leftlen > 0)
+            {
+                gd = true;
+
+                choose.Add(leftlen);
+                if (gc[leftlen] == 1)
                 {
-                    ori = a;
-                    a = new Point2d(a.X - a.GetDistanceTo(b), a.Y );
+                    gc.Remove(leftlen);
+                }
+                else
+                {
+                    gc[leftlen]--;
+                }
+                ary.Remove(leftlen);
+
+                //加到材料切割数组里
+                if (!bc.ContainsKey((int)((int)a.GetDistanceTo(b) + 1) / 10 * 10))
+                {
+                    bc.Add(((int)((int)a.GetDistanceTo(b) + 1) / 10) * 10, 1);
+                }
+                else
+                {
+                    bc[((int)((int)a.GetDistanceTo(b) + 1) / 10) * 10] += 1;
+                }
+                leftlen = 0;
+
+            }
+
+            //2块能解决
+            if (gd == false && ary.Count >= 2 && leftlen > 0)
+            {
+                for (int Index1 = 0; Index1 <= ary.Count - 2 && gd == false; Index1++)
+                {
+                    for (int Index2 = 1; Index2 <= ary.Count - 1 && gd == false; Index2++)
+                    {
+                        if ((int)ary[Index1] + (int)ary[Index2] == leftlen)
+                        {
+                            gd = true;
+
+                            choose.Add(ary[Index1]);
+                            choose.Add(ary[Index2]);
+
+
+
+                            if (gc[(int)ary[Index1]] == 1)
+                            {
+                                //gc.Remove((int)ary[Index1]);
+                                gc[(int)ary[Index1]]--;
+                            }
+                            else
+                            {
+                                gc[(int)ary[Index1]]--;
+                            }
+
+
+                            if (!bc.ContainsKey(((int)ary[Index1] + 1) / 10 * 10))
+                            {
+                                bc.Add((((int)ary[Index1]) / 10) * 10, 1);
+                            }
+                            else
+                            {
+                                bc[(((int)ary[Index1] + 1) / 10) * 10] += 1;
+                            }
+                            /*
+                            if (gc[(int)ary[Index2]] == 1)
+                            {
+                                gc.Remove((int)ary[Index2]);
+                            }
+                            else
+                            {
+                                gc[(int)ary[Index2]]--;
+                            }
+                            */
+
+
+                            if (!bc.ContainsKey(((int)ary[Index2] + 1) / 10 * 10))
+                            {
+                                bc.Add((((int)ary[Index2]) / 10) * 10, 1);
+                            }
+                            else
+                            {
+                                bc[(((int)ary[Index2] + 1) / 10) * 10] += 1;
+                            }
+                            leftlen = 0;
+                            string tr = "";
+                            tr = ary[Index1] + "," + ary[Index2];
+
+                            string[] trs = tr.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                            foreach (string trk in trs)
+                            {
+                                ary.Remove(int.Parse(trk));
+                            }
+
+                            break;
+                        }
+                    }
+
                 }
             }
-            AlignedDimension acRotDime = new AlignedDimension();
-            acRotDime.DimensionStyle = acCurDb.Dimstyle;
-            acRotDime.Dimclrd = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
-            acRotDime.Dimclrt = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
-            acRotDime.Dimclre = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
 
-
-            acRotDime.XLine1Point = new Point3d(ori.X, ori.Y, 0);
-            acRotDime.XLine2Point = new Point3d(a.X, a.Y, 0);
-
-
-            if (Math.Abs(ori.X - a.X) < 1.0)//竖
+            //3块能解决
+            if (gd == false && ary.Count >= 3 && leftlen > 0)
             {
-                acRotDime.DimLinePoint = new Point3d(ori.X + textposition, (a.Y + ori.Y) / 2, 0);
+                for (int Index1 = 0; Index1 <= ary.Count - 3 && gd == false; Index1++)
+                {
+                    for (int Index2 = 1; Index2 <= ary.Count - 2 && gd == false; Index2++)
+                    {
+                        for (int Index3 = 2; Index3 <= ary.Count - 1 && gd == false; Index3++)
+                        {
+                            if ((int)ary[Index1] + (int)ary[Index2] + (int)ary[Index3] == leftlen)
+                            {
+                                gd = true;
+
+                                choose.Add(ary[Index1]);
+                                choose.Add(ary[Index2]);
+                                choose.Add(ary[Index3]);
+                                /*
+                                if (gc[(int)ary[Index1]] == 1)
+                                {
+                                    gc.Remove((int)ary[Index1]);
+                                }
+                                else
+                                {
+                                    gc[(int)ary[Index1]]--;
+                                }
+                                */
+                                gc[(int)ary[Index1]]--;
+                                //ary.Remove((int)ary[Index1]);
+
+                                if (!bc.ContainsKey(((int)ary[Index1] + 1) / 10 * 10))
+                                {
+                                    bc.Add((((int)ary[Index1]) / 10) * 10, 1);
+                                }
+                                else
+                                {
+                                    bc[(((int)ary[Index1] + 1) / 10) * 10] += 1;
+                                }
+                                /*
+                                if (gc[(int)ary[Index2]] == 1)
+                                {
+                                    gc.Remove((int)ary[Index2]);
+                                }
+                                else
+                                {
+                                    gc[(int)ary[Index2]]--;
+                                }
+                                */
+                                gc[(int)ary[Index2]]--;
+                                //ary.Remove((int)ary[Index2]);
+
+                                if (!bc.ContainsKey(((int)ary[Index2] + 1) / 10 * 10))
+                                {
+                                    bc.Add((((int)ary[Index2]) / 10) * 10, 1);
+                                }
+                                else
+                                {
+                                    bc[(((int)ary[Index2] + 1) / 10) * 10] += 1;
+                                }
+                                /*
+                                if (gc[(int)ary[Index3]] == 1)
+                                {
+                                    gc.Remove((int)ary[Index3]);
+                                }
+                                else
+                                {
+                                    gc[(int)ary[Index3]]--;
+                                }
+                                */
+                                gc[(int)ary[Index3]]--;
+                                //ary.Remove((int)ary[Index3]);
+                                leftlen = 0;
+
+                                string tr = "";
+                                tr = ary[Index1] + "," + ary[Index2] + "," + ary[Index3];
+
+                                string[] trs = tr.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                foreach (string trk in trs)
+                                {
+                                    ary.Remove(int.Parse(trk));
+                                }
+
+
+                                break;
+                            }
+                        }
+                    }
+                }
             }
-            else
+            //4块能解决
+            if (gd == false && ary.Count >= 4 && leftlen > 0)
             {
-                acRotDime.DimLinePoint = new Point3d((ori.X + a.X) / 2, a.Y + textposition, 0);
+                for (int Index1 = 0; Index1 <= ary.Count - 4 && gd == false; Index1++)
+                {
+                    for (int Index2 = 1; Index2 <= ary.Count - 3 && gd == false; Index2++)
+                    {
+                        for (int Index3 = 2; Index3 <= ary.Count - 2 && gd == false; Index3++)
+                        {
+                            for (int Index4 = 3; Index4 <= ary.Count - 1 && gd == false; Index4++)
+                            {
+                                if ((int)ary[Index1] + (int)ary[Index2] + (int)ary[Index3] + (int)ary[Index4] == leftlen)
+                                {
+                                    gd = true;
+
+                                    choose.Add(ary[Index1]);
+                                    choose.Add(ary[Index2]);
+                                    choose.Add(ary[Index3]);
+                                    choose.Add(ary[Index4]);
+                                    /*
+                                    if (gc[(int)ary[Index1]] == 1)
+                                    {
+                                        gc.Remove((int)ary[Index1]);
+                                    }
+                                    else
+                                    {
+                                        gc[(int)ary[Index1]]--;
+                                    }
+                                    */
+                                    gc[(int)ary[Index1]]--;
+                                    //ary.Remove((int)ary[Index1]);
+
+                                    if (!bc.ContainsKey(((int)ary[Index1] + 1) / 10 * 10))
+                                    {
+                                        bc.Add((((int)ary[Index1]) / 10) * 10, 1);
+                                    }
+                                    else
+                                    {
+                                        bc[(((int)ary[Index1] + 1) / 10) * 10] += 1;
+                                    }
+                                    /*
+                                    if (gc[(int)ary[Index2]] == 1)
+                                    {
+                                        gc.Remove((int)ary[Index2]);
+                                    }
+                                    else
+                                    {
+                                        gc[(int)ary[Index2]]--;
+                                    }
+                                    */
+                                    gc[(int)ary[Index2]]--;
+                                    //ary.Remove((int)ary[Index2]);
+
+                                    if (!bc.ContainsKey(((int)ary[Index2] + 1) / 10 * 10))
+                                    {
+                                        bc.Add((((int)ary[Index2]) / 10) * 10, 1);
+                                    }
+                                    else
+                                    {
+                                        bc[(((int)ary[Index2] + 1) / 10) * 10] += 1;
+                                    }
+                                    /*
+                                    if (gc[(int)ary[Index3]] == 1)
+                                    {
+                                        gc.Remove((int)ary[Index3]);
+                                    }
+                                    else
+                                    {
+                                        gc[(int)ary[Index3]]--;
+                                    }
+                                    */
+                                    gc[(int)ary[Index3]]--;
+                                    //ary.Remove((int)ary[Index3]);
+
+                                    if (!bc.ContainsKey(((int)ary[Index3] + 1) / 10 * 10))
+                                    {
+                                        bc.Add((((int)ary[Index3]) / 10) * 10, 1);
+                                    }
+                                    else
+                                    {
+                                        bc[(((int)ary[Index3] + 1) / 10) * 10] += 1;
+                                    }
+                                    /*
+                                    if (gc[(int)ary[Index4]] == 1)
+                                    {
+                                        gc.Remove((int)ary[Index4]);
+                                    }
+                                    else
+                                    {
+                                        gc[(int)ary[Index4]]--;
+                                    }
+                                    */
+                                    gc[(int)ary[Index4]]--;
+                                    //ary.Remove((int)ary[Index4]);
+
+                                    if (!bc.ContainsKey(((int)ary[Index4] + 1) / 10 * 10))
+                                    {
+                                        bc.Add((((int)ary[Index4]) / 10) * 10, 1);
+                                    }
+                                    else
+                                    {
+                                        bc[(((int)ary[Index4] + 1) / 10) * 10] += 1;
+                                    }
+                                    leftlen = 0;
+                                    string tr = "";
+                                    tr = ary[Index1] + "," + ary[Index2] + "," + ary[Index3] + "," + ary[Index4];
+
+                                    string[] trs = tr.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                    foreach (string trk in trs)
+                                    {
+                                        ary.Remove(int.Parse(trk));
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            // 将新对象添加到块表记录 ModelSpace 及事务
-            acBlkTblRec.AppendEntity(acRotDime);
-            acTrans.AddNewlyCreatedDBObject(acRotDime, true);
+
+            //5块能解决
+            if (gd == false && ary.Count >= 4 && leftlen > 0)
+            {
+                for (int Index1 = 0; Index1 <= ary.Count - 5 && gd == false; Index1++)
+                {
+                    for (int Index2 = 1; Index2 <= ary.Count - 4 && gd == false; Index2++)
+                    {
+                        for (int Index3 = 2; Index3 <= ary.Count - 3 && gd == false; Index3++)
+                        {
+                            for (int Index4 = 3; Index4 <= ary.Count - 2 && gd == false; Index4++)
+                            {
+                                for (int Index5 = 4; Index5 <= ary.Count - 1 && gd == false; Index5++)
+                                {
+                                    if ((int)ary[Index1] + (int)ary[Index2] + (int)ary[Index3] + (int)ary[Index4] + (int)ary[Index5] == leftlen)
+                                    {
+                                        gd = true;
+                                        choose.Add(ary[Index1]);
+                                        choose.Add(ary[Index2]);
+                                        choose.Add(ary[Index3]);
+                                        choose.Add(ary[Index4]);
+                                        choose.Add(ary[Index5]);
+                                        /*
+                                        if (gc[(int)ary[Index1]] == 1)
+                                        {
+                                            gc.Remove((int)ary[Index1]);
+                                        }
+                                        else
+                                        {
+                                            gc[(int)ary[Index1]]--;
+                                        }
+                                        */
+                                        gc[(int)ary[Index1]]--;
+                                        //ary.Remove((int)ary[Index1]);
+
+                                        if (!bc.ContainsKey(((int)ary[Index1] + 1) / 10 * 10))
+                                        {
+                                            bc.Add((((int)ary[Index1]) / 10) * 10, 1);
+                                        }
+                                        else
+                                        {
+                                            bc[(((int)ary[Index1] + 1) / 10) * 10] += 1;
+                                        }
+                                        /*
+                                        if (gc[(int)ary[Index2]] == 1)
+                                        {
+                                            gc.Remove((int)ary[Index2]);
+                                        }
+                                        else
+                                        {
+                                            gc[(int)ary[Index2]]--;
+                                        }
+                                        */
+                                        gc[(int)ary[Index2]]--;
+                                        //ary.Remove((int)ary[Index2]);
+
+                                        if (!bc.ContainsKey(((int)ary[Index2] + 1) / 10 * 10))
+                                        {
+                                            bc.Add((((int)ary[Index2]) / 10) * 10, 1);
+                                        }
+                                        else
+                                        {
+                                            bc[(((int)ary[Index2] + 1) / 10) * 10] += 1;
+                                        }
+                                        /*
+                                        if (gc[(int)ary[Index3]] == 1)
+                                        {
+                                            gc.Remove((int)ary[Index3]);
+                                        }
+                                        else
+                                        {
+                                            gc[(int)ary[Index3]]--;
+                                        }
+                                        */
+                                        gc[(int)ary[Index3]]--;
+                                        //ary.Remove((int)ary[Index3]);
+
+                                        if (!bc.ContainsKey(((int)ary[Index3] + 1) / 10 * 10))
+                                        {
+                                            bc.Add((((int)ary[Index3]) / 10) * 10, 1);
+                                        }
+                                        else
+                                        {
+                                            bc[(((int)ary[Index3] + 1) / 10) * 10] += 1;
+                                        }
+                                        /*
+                                        if (gc[(int)ary[Index4]] == 1)
+                                        {
+                                            gc.Remove((int)ary[Index4]);
+                                        }
+                                        else
+                                        {
+                                            gc[(int)ary[Index4]]--;
+                                        }
+                                        */
+                                        gc[(int)ary[Index4]]--;
+                                        //ary.Remove((int)ary[Index4]);
+
+                                        if (!bc.ContainsKey(((int)ary[Index4] + 1) / 10 * 10))
+                                        {
+                                            bc.Add((((int)ary[Index4]) / 10) * 10, 1);
+                                        }
+                                        else
+                                        {
+                                            bc[(((int)ary[Index4] + 1) / 10) * 10] += 1;
+                                        }
+                                        /*
+                                        if (gc[(int)ary[Index5]] == 1)
+                                        {
+                                            gc.Remove((int)ary[Index5]);
+                                        }
+                                        else
+                                        {
+                                            gc[(int)ary[Index5]]--;
+                                        }
+                                        */
+                                        gc[(int)ary[Index5]]--;
+                                        //ary.Remove((int)ary[Index5]);
+
+                                        if (!bc.ContainsKey(((int)ary[Index5] + 1) / 10 * 10))
+                                        {
+                                            bc.Add((((int)ary[Index5]) / 10) * 10, 1);
+                                        }
+                                        else
+                                        {
+                                            bc[(((int)ary[Index5] + 1) / 10) * 10] += 1;
+                                        }
+                                        leftlen = 0;
+                                        string tr = "";
+                                        tr = ary[Index1] + "," + ary[Index2] + "," + ary[Index3] + "," + ary[Index4] + "," + ary[Index5];
+
+                                        string[] trs = tr.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                        foreach (string trk in trs)
+                                        {
+                                            ary.Remove(int.Parse(trk));
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            keyNames = "";
+
+            foreach (int key in gc.Keys)
+
+            {
+
+                if (gc[key] == 0)
+
+                {
+                    keyNames += key + ",";
+                }
+
+            }
+
+            str_keyNames = keyNames.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string key in str_keyNames)
+            {
+                gc.Remove(int.Parse(key));
+            }
+
+            ary.Sort();
+            ary.Reverse();
+
+
+            keyNames = "";
+
+            foreach (int key in gc.Keys)
+
+            {
+
+                if (gc[key] == 0)
+
+                {
+                    keyNames += key + ",";
+                }
+
+            }
+
+            str_keyNames = keyNames.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string key in str_keyNames)
+            {
+                gc.Remove(int.Parse(key));
+            }
+            //没有正合适的组合
+            //剩的长大
+            //优先选50的
+            while (ary.Count > 0 && leftlen - (int)ary[ary.Count - 1] > 199)
+            {
+                for (int i = 0; i < ary.Count; i++)
+                {
+                    if (leftlen - (int)ary[i] > 199 && (leftlen - (int)ary[i]) % 100 < 1)
+                    {
+                        choose.Add(ary[i]);
+
+                        leftlen -= (int)ary[i];
+
+                        gc.Remove((int)ary[i]);
+
+                        if (!bc.ContainsKey(((int)ary[i] + 1) / 10 * 10))
+                        {
+                            bc.Add((((int)ary[i]) / 10) * 10, 1);
+                        }
+                        else
+                        {
+                            bc[(((int)ary[i] + 1) / 10) * 10] += 1;
+                        }
+                        ary.RemoveAt(i);
+                    }
+                }
+                for (int i = 0; i < ary.Count; i++)
+                {
+                    if (leftlen - (int)ary[i] > 199)
+                    {
+                        choose.Add(ary[i]);
+
+                        leftlen -= (int)ary[i];
+                        gc.Remove((int)ary[i]);
+
+                        if (!bc.ContainsKey(((int)ary[i] + 1) / 10 * 10))
+                        {
+                            bc.Add((((int)ary[i]) / 10) * 10, 1);
+                        }
+                        else
+                        {
+                            bc[(((int)ary[i] + 1) / 10) * 10] += 1;
+                        }
+                        ary.RemoveAt(i);
+                    }
+                }
+            }
+            //剩的长小
+            for (int i = 0; i < ary.Count && ary.Count > 0 && leftlen > 0; i++)
+            {
+                if ((int)ary[i] - leftlen > 199 && ((int)ary[i] - leftlen) % 100 < 1)
+                {
+
+                    choose.Add(leftlen);
+                    if (gc[(int)ary[i]]-- == 0)
+                    {
+                        gc.Remove((int)ary[i]);
+                    }
+                    if (!gc.ContainsKey((int)ary[i] - leftlen))
+                    {
+                        gc.Add((int)ary[i] - leftlen, 1);
+                    }
+                    else
+                    {
+                        gc[(int)ary[i] - leftlen] += 1;
+
+                    }
+
+                    if (!bc.ContainsKey(leftlen))
+                    {
+                        bc.Add(leftlen, 1);
+                    }
+                    else
+                    {
+                        bc[leftlen] += 1;
+                    }
+                    ary[i] = (int)ary[i] - leftlen;
+                    leftlen = 0;
+
+                }
+            }
+
+            for (int i = 0; i < ary.Count && ary.Count > 0 && leftlen > 0; i++)
+            {
+                if ((int)ary[i] - leftlen > 199)
+                {
+
+                    choose.Add(leftlen);
+                    if (gc[(int)ary[i]]-- == 0)
+                    {
+                        gc.Remove((int)ary[i]);
+                    }
+                    if (!gc.ContainsKey((int)ary[i] - leftlen))
+                    {
+                        gc.Add((int)ary[i] - leftlen, 1);
+                    }
+                    else
+                    {
+                        gc[(int)ary[i] - leftlen] += 1;
+
+                    }
+
+                    if (!bc.ContainsKey(leftlen))
+                    {
+                        bc.Add(leftlen, 1);
+                    }
+                    else
+                    {
+                        bc[leftlen] += 1;
+                    }
+                    ary[i] = (int)ary[i] - leftlen;
+                    leftlen = 0;
+
+                }
+            }
+
+            for (int i = 0; i < ary.Count && ary.Count > 0 && leftlen > 0; i++)
+            {
+                if (Math.Abs((int)ary[i] - leftlen) < 3)
+                {
+
+                    choose.Add(leftlen);
+                    if (gc[(int)ary[i]]-- == 0)
+                    {
+                        gc.Remove((int)ary[i]);
+                    }
+                    if (!gc.ContainsKey((int)ary[i] - leftlen))
+                    {
+                        gc.Add((int)ary[i] - leftlen, 1);
+                    }
+                    else
+                    {
+                        gc[(int)ary[i] - leftlen] += 1;
+
+                    }
+
+                    if (!bc.ContainsKey(leftlen))
+                    {
+                        bc.Add(leftlen, 1);
+                    }
+                    else
+                    {
+                        bc[leftlen] += 1;
+                    }
+                    ary[i] = (int)ary[i] - leftlen;
+                    leftlen = 0;
+
+                }
+            }
+            //割剩
+            if (leftlen != 0)
+            {
+                ary.Add(1200 - leftlen);
+                choose.Add(leftlen);
+
+                if (!gc.ContainsKey(1200 - leftlen))
+                {
+                    gc.Add(1200 - leftlen, 1);
+                }
+                else
+                {
+                    gc[1200 - leftlen] += 1;
+
+                }
+
+                if (!bc.ContainsKey(leftlen))
+                {
+                    bc.Add(leftlen, 1);
+                }
+                else
+                {
+                    bc[leftlen] += 1;
+                }
+                leftlen = 0;
+
+            }
+
+
+            keyNames = "";
+            foreach (int key in gc.Keys)
+
+            {
+                if (gc[key] == 0)
+
+                {
+                    keyNames += key + ",";
+                }
+
+            }
+
+            str_keyNames = keyNames.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string key in str_keyNames)
+            {
+                gc.Remove(int.Parse(key));
+            }
+
+
+            //长板切小
+            //表
+            string qieS = "";
+            foreach (int key in bc.Keys)
+
+            {
+                if (key > 601)
+
+                {
+                    qieS += key + ",";
+                }
+
+            }
+            string[] qieSSZ = qieS.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string key in qieSSZ)
+            {
+
+                if (!bc.ContainsKey(int.Parse(key) / 100 / 2 * 100))
+                {
+                    bc.Add(int.Parse(key) / 100 / 2 * 100, bc[int.Parse(key)]);
+                }
+                else
+                {
+                    bc[int.Parse(key) / 100 / 2 * 100] += bc[int.Parse(key)];
+                }
+
+                if (!bc.ContainsKey(int.Parse(key) - int.Parse(key) / 100 / 2 * 100))
+                {
+                    bc.Add(int.Parse(key) - int.Parse(key) / 100 / 2 * 100, bc[int.Parse(key)]);
+                }
+                else
+                {
+                    bc[int.Parse(key) - int.Parse(key) / 100 / 2 * 100] += bc[int.Parse(key)];
+                }
+
+                bc.Remove(int.Parse(key));
+
+            }
+
+            //图
+            int chcnt = choose.Count;
+            ArrayList Torm = new ArrayList();
+            for (int each = 0; each < chcnt; each++)
+            {
+                if ((int)choose[each] > 601)
+                {
+                    Torm.Add(choose[each]);
+                }
+            }
+            foreach (int rm in Torm)
+            {
+                choose.Remove(rm);
+                choose.Add(rm / 100 / 2 * 100);
+                choose.Add(rm - rm / 100 / 2 * 100);
+            }
+            //画出来
+
+            while (choose.Count > 0)
+            {
+                int line_section = (int)choose[0];
+
+
+                if (Math.Abs(a.X - b.X) < 1)
+                {//竖
+                    if (a.Y > b.Y)//上向下
+                    {
+                        ori = a;
+                        a = new Point2d(a.X, a.Y - line_section);
+                    }
+                    else//下向上
+                    {
+                        ori = a;
+                        a = new Point2d(a.X, a.Y + line_section);
+                    }
+
+                }
+                else//横
+                {
+                    if (a.X < b.X)//左向右
+                    {
+                        ori = a;
+                        a = new Point2d(a.X + line_section, a.Y);
+                    }
+                    else//右向左
+                    {
+                        ori = a;
+                        a = new Point2d(a.X - line_section, a.Y);
+                    }
+                }
+
+
+
+
+                AlignedDimension acRotDime = new AlignedDimension();
+                acRotDime.DimensionStyle = acCurDb.Dimstyle;
+                acRotDime.Dimclrd = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
+                acRotDime.Dimclrt = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
+                acRotDime.Dimclre = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
+
+
+                acRotDime.XLine1Point = new Point3d(ori.X, ori.Y, 0);
+                acRotDime.XLine2Point = new Point3d(a.X, a.Y, 0);
+
+
+                if (Math.Abs(ori.X - a.X) < 1.0)//竖
+                {
+                    acRotDime.DimLinePoint = new Point3d(ori.X + textposition, (a.Y + ori.Y) / 2, 0);
+                }
+                else
+                {
+                    acRotDime.DimLinePoint = new Point3d((ori.X + a.X) / 2, a.Y + textposition, 0);
+                }
+                // 将新对象添加到块表记录 ModelSpace 及事务
+                acBlkTblRec.AppendEntity(acRotDime);
+                acTrans.AddNewlyCreatedDBObject(acRotDime, true);
+
+                //finally
+                //globalChoose.Add(line_section);
+                choose.Remove(line_section);
+            }
+
+
+
+            ////加到材料切割数组里
+            //if (!bc.ContainsKey((int)((int)a.GetDistanceTo(b) + 1) / 10 * 10))
+            //{
+            //    bc.Add(((int)((int)a.GetDistanceTo(b) + 1) / 10) * 10, 1);
+            //}
+            //else
+            //{
+            //    bc[((int)((int)a.GetDistanceTo(b) + 1) / 10) * 10] += 1;
+            //}
+            ////画出来
+            //if (Math.Abs(a.X - b.X) < 1)
+            //{//竖
+            //    if (a.Y > b.Y)//上向下
+            //    {
+            //        ori = a;
+            //        a = new Point2d(a.X, a.Y - a.GetDistanceTo(b));
+            //    }
+            //    else//下向上
+            //    {
+            //        ori = a;
+            //        a = new Point2d(a.X, a.Y + a.GetDistanceTo(b) );
+            //    }
+
+            //}
+            //else//横
+            //{
+            //    if (a.X < b.X)//左向右
+            //    {
+            //        ori = a;
+            //        a = new Point2d(a.X + a.GetDistanceTo(b), a.Y );
+            //    }
+            //    else//右向左
+            //    {
+            //        ori = a;
+            //        a = new Point2d(a.X - a.GetDistanceTo(b), a.Y );
+            //    }
+            //}
+
+
+
+
+            //AlignedDimension acRotDime = new AlignedDimension();
+            //acRotDime.DimensionStyle = acCurDb.Dimstyle;
+            //acRotDime.Dimclrd = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
+            //acRotDime.Dimclrt = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
+            //acRotDime.Dimclre = Autodesk.AutoCAD.Colors.Color.FromRgb(124, 252, 0);
+
+
+            //acRotDime.XLine1Point = new Point3d(ori.X, ori.Y, 0);
+            //acRotDime.XLine2Point = new Point3d(a.X, a.Y, 0);
+
+
+            //if (Math.Abs(ori.X - a.X) < 1.0)//竖
+            //{
+            //    acRotDime.DimLinePoint = new Point3d(ori.X + textposition, (a.Y + ori.Y) / 2, 0);
+            //}
+            //else
+            //{
+            //    acRotDime.DimLinePoint = new Point3d((ori.X + a.X) / 2, a.Y + textposition, 0);
+            //}
+            //// 将新对象添加到块表记录 ModelSpace 及事务
+            //acBlkTblRec.AppendEntity(acRotDime);
+            //acTrans.AddNewlyCreatedDBObject(acRotDime, true);
             //bc[(a.GetDistanceTo(b) + 1) % 10 * 10] += 1;
 
 
@@ -192,7 +1088,6 @@ namespace MyFirstProject1
         [CommandMethod("ListEntities")]
         public static void ListEntities()
         {
- 
 
 
             // Get the current document and database, and start a transaction
@@ -210,7 +1105,7 @@ namespace MyFirstProject1
                 OpenMode.ForWrite) as BlockTableRecord;
                 int nCnt = 0;
                 acDoc.Editor.WriteMessage("\nModel space objects: ");
-
+                bool minflag;
                 // Step through each object in Model space and
                 // display the type of object found
                 foreach (ObjectId asObjId in acBlkTblRec)
@@ -222,14 +1117,14 @@ namespace MyFirstProject1
                         //acDoc.Editor.WriteMessage("\nObjectID: " + asObjId.ToString());
                         //acDoc.Editor.WriteMessage("\nHandle: " + asObjId.Handle.ToString());
                         //acDoc.Editor.WriteMessage("\n");
-
+                        minflag = false;
                         Hatch hatch = asObjId.GetObject(OpenMode.ForRead) as Hatch;
                         HatchObjectType type = hatch.HatchObjectType;  //HatchObjectType: 
                         HatchStyle style = hatch.HatchStyle;  //HatchObjecthatch.HatchStyle: Normal
                         int lines = hatch.NumberOfHatchLines; //hatch.NumberOfHatchLines: 3
                         string stylename = hatch.PlotStyleName;   //hatch.PlotStyleName: ByBlock
                         //hatch.PatternName
-                        if (hatch.PatternName.Equals("ANSI37"))
+                        if (hatch.PatternName.Equals("ANSI37") || hatch.PatternName.Equals("多孔材料"))
                         {
                             //                        acDoc.Editor.WriteMessage("\n HatchObjectType: " + hatch.HatchObjectType + " hatch.HatchStyle: " + hatch.HatchStyle
                             //+ " hatch.NumberOfHatchLines: " + hatch.NumberOfHatchLines + " hatch.PlotStyleName: " + hatch.PlotStyleName +
@@ -238,7 +1133,7 @@ namespace MyFirstProject1
 
                             //Line2dCollection lineCollection= hatch.GetHatchLinesData();
 
-
+                            hatch.Highlight();
                             //获取hatch边界
                             int loopNum = hatch.NumberOfLoops;
                             acDoc.Editor.WriteMessage("\nloopNum: " + loopNum);
@@ -315,6 +1210,46 @@ namespace MyFirstProject1
                                     //acDoc.Editor.WriteMessage("\n col_point2d: " + col_point2d[pindex]);
                                     //col_point2d[pindex].GetDistanceTo(col_point2d[(pindex + 1) % col_point2d.Count]);
                                 }
+                                //去非顶点的点
+                                pindex = 0;
+                                ppindex = 1;
+                                int pppindex = 2;
+                                ArrayList p2rm = new ArrayList();
+                                while ( pindex < col_point2d.Count - 2)
+                                {
+
+                                    if ((Math.Abs(col_point2d[pindex].X - col_point2d[ppindex].X) < 1 && Math.Abs(col_point2d[ppindex].X - col_point2d[pppindex].X) < 1)||( Math.Abs(col_point2d[pindex].Y - col_point2d[ppindex].Y) < 1 && Math.Abs(col_point2d[ppindex].Y - col_point2d[pppindex].Y) < 1))
+                                    {
+                                        p2rm.Add(col_point2d[ppindex]);
+                                        acDoc.Editor.WriteMessage("\n pindex: " + pindex + "\n ppindex: " + ppindex + "\n pppindex: " + pppindex);
+                                        ppindex++;
+                                        pppindex++;
+                                    }
+                                    else
+                                    {
+                                        pppindex++;
+                                        ppindex++;
+                                        pindex++;
+                                    }
+
+
+                                    //acDoc.Editor.WriteMessage("\n col_point2d: " + col_point2d[pindex]);
+                                    //col_point2d[pindex].GetDistanceTo(col_point2d[(pindex + 1) % col_point2d.Count]);
+                                }
+                                foreach(Point2d trm in p2rm)
+                                {
+                                    acDoc.Editor.WriteMessage("\n trm: " + trm);
+                                    if(col_point2d.Contains(trm))
+                                    {
+                                        col_point2d.Remove(trm);
+                                    }
+                                }
+
+
+                                if (col_point2d.Count % 2 == 1)
+                                {
+                                    break;
+                                }
 
                                 //将线长按点的顺序放入patchline 数组
                                 double[] hatchlines = new double[col_point2d.Count];
@@ -322,12 +1257,11 @@ namespace MyFirstProject1
                                 {
                                     hatchlines[pindex] = col_point2d[pindex].GetDistanceTo(col_point2d[(pindex + 1) % col_point2d.Count]);
 
-
                                 }
                                 acDoc.Editor.WriteMessage("\n  col_point2d.Count: " + col_point2d.Count);
                                 //======================================================================================================
                                 //double maxValue = patchlines[0];
-                                double minValue = 2000;
+                                double minValue = 200;
                                 int minIndex = 0;
                                 double totalLen = 0;
                                 int width1Index = 0;
@@ -336,10 +1270,12 @@ namespace MyFirstProject1
                                 {
                                     //if (patchlines[ia] > maxValue) maxValue = patchlines[ia];
                                     //找最小边长（宽）
-                                    if ((hatchlines[ia] < minValue) && (hatchlines[ia]>70))
+                                    //if ((hatchlines[ia] < minValue) )
+                                    if ((hatchlines[ia] < minValue) && (hatchlines[ia] > 59) && (hatchlines[ia] < 151) && Math.Abs(hatchlines[ia] - hatchlines[(ia + hatchlines.Length / 2) % hatchlines.Length]) < 1)
                                     {
                                         minValue = hatchlines[ia];
                                         minIndex = ia;
+                                        minflag = true;
                                     }
                                     width1Index = ia;
                                     width2Index = (ia + hatchlines.Length / 2) % hatchlines.Length;
@@ -355,30 +1291,39 @@ namespace MyFirstProject1
                                     acDoc.Editor.WriteMessage("\n hatchlines[ia] " + hatchlines[ia]);
 
                                 }
-                                acDoc.Editor.WriteMessage("\n width1Index " + width1Index + " width2Index " + width2Index);
-
-                                if (totalLen < 400.0 + 1.0)
+                                acDoc.Editor.WriteMessage("\n  minValue: " + minValue);
+                                if (minflag == false)
                                 {
-                                    break;
+                                    //break;
                                 }
-                                nCnt = nCnt + 1;
-                                hatch.Highlight();
-                                //留住最长的边，最后处理剩料
                                 /*
                                 if (longestline < totalLen)
                                 {
                                     eXchangeTmp = longest_point2d;
                                     longest_point2d = col_point2d;
                                     longestline = totalLen;
+                                    col_point2d = eXchangeTmp;
                                     if (eXchangeTmp.Count == 0)
                                     {
                                         break;
                                     }
-                                    col_point2d = eXchangeTmp;
-
-
                                 }
                                 */
+
+                                acDoc.Editor.WriteMessage("\n width1Index " + width1Index + " width2Index " + width2Index);
+
+                                if (totalLen < 400.0 + 1.0)
+                                {
+                                    break;
+                                }
+
+                                nCnt = nCnt + 1;
+
+
+ 
+
+
+
                                 totalLen = totalLen / 2 - minValue;
                                 acDoc.Editor.WriteMessage("\n totalLen: " + totalLen);
                                 double hatchWidth = minValue;
@@ -500,9 +1445,9 @@ namespace MyFirstProject1
                                             }
 
                                             //设置标注偏移位置
-                                            if(col_point2d[longLenIndex].X<col_point2d[otherIndex].X)
+                                            if (col_point2d[longLenIndex].X < col_point2d[otherIndex].X)
                                             {
-                                                textPosition[pcount] = -200;                                           
+                                                textPosition[pcount] = -200;
                                             }
                                             else
                                             {
@@ -702,7 +1647,10 @@ namespace MyFirstProject1
 
                                     // 提交修改，关闭事务
                                     //acTrans.Commit();
-                                    cutLine(drawLinePoints[2 * linecount - 2], drawLinePoints[2 * linecount - 1],ref acCurDb, textPosition[linecount],  acTrans,ref   acBlkTblRec);
+                                    if (drawLinePoints[2 * linecount - 2].GetDistanceTo(drawLinePoints[2 * linecount - 1]) < 80000)
+                                    {
+                                        cutLine(drawLinePoints[2 * linecount - 2], drawLinePoints[2 * linecount - 1], ref acCurDb, textPosition[linecount], acTrans, ref acBlkTblRec);
+                                    }
                                 }
 
                                 acDoc.Editor.WriteMessage("\n find 依次处理两边的边 over ");
@@ -731,19 +1679,24 @@ namespace MyFirstProject1
                                 //btr.AppendEntity(pl);
                                 //trans.AddNewlyCreatedDBObject(pl, true); 
                             }
+                            if (minflag == false)
+                            {
+                                //continue;
 
+                            }
                         }
 
                     }
 
                 }
+
                 bc.Remove(0);
 
-                FileInfo newFile = new FileInfo(@"d:\test.xlsx");
+                FileInfo newFile = new FileInfo(@"test.xlsx");
                 if (newFile.Exists)
                 {
                     newFile.Delete();
-                    newFile = new FileInfo(@"d:\test.xlsx");
+                    newFile = new FileInfo(@"test.xlsx");
                 }
 
                 using (ExcelPackage package = new ExcelPackage(newFile))
@@ -754,12 +1707,30 @@ namespace MyFirstProject1
                     int n = 2;
                     foreach (KeyValuePair<int, int> kvp in bc)
                     {
-                        Console.WriteLine("板材长度：{0},数量：{1}", kvp.Key, kvp.Value);
-                        acDoc.Editor.WriteMessage("板材长度：{0},数量：{1}", kvp.Key, kvp.Value);
+                        //if(kvp.Key>601)
+                        //{
+                        //    worksheet.Cells[n, 1].Value = kvp.Key/2;
+                        //    worksheet.Cells[n, 2].Value = kvp.Value*2;
+                        //}
+                        //else
+                        {
+                            worksheet.Cells[n, 1].Value = kvp.Key;
+                            worksheet.Cells[n, 2].Value = kvp.Value;
+                        }
+
+                        n++;
+                    }
+                    worksheet.Cells[n, 1].Value = "废料长度";
+                    worksheet.Cells[n++, 2].Value = "数量";
+                    foreach (KeyValuePair<int, int> kvp in gc)
+                    {
+
+                        Console.WriteLine("废料长度：{0},数量：{1}", kvp.Key, kvp.Value);
                         worksheet.Cells[n, 1].Value = kvp.Key;
                         worksheet.Cells[n, 2].Value = kvp.Value;
                         n++;
                     }
+
                     package.Save();
                 }
                 acTrans.Commit();
